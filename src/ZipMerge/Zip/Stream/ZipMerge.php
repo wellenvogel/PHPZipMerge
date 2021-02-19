@@ -14,6 +14,7 @@
 namespace ZipMerge\Zip\Stream;
 
 use com\grandt\BinStringStatic;
+use ZipMerge\util\VariableStream;
 use ZipMerge\Zip\Core\AbstractException;
 use ZipMerge\Zip\Core\AbstractZipWriter;
 use ZipMerge\Zip\Core\Header\EndOfCentralDirectory;
@@ -23,8 +24,8 @@ use ZipMerge\Zip\Exception\HeaderPositionError;
 use ZipMerge\Zip\Exception\BufferNotEmpty;
 use ZipMerge\Zip\Exception\HeadersSent;
 use ZipMerge\Zip\Exception\IncompatiblePhpVersion;
+use ZipMerge\Zip\File\File;
 use ZipMerge\Zip\Listener\ZipArchiveListener;
-use ZipMerge\util\VariableStream;
 
 
 class ZipMerge {
@@ -93,7 +94,7 @@ class ZipMerge {
         }
         if (is_string($file) && is_file($file)) {
             $handle = fopen($file, 'r');
-            $this->processStream($handle, $subPath);
+            $this->processStream($handle);
             fclose($handle);
         } else if (is_resource($file) && get_resource_type($file) == "stream") {
             $this->processStream($file);
@@ -163,6 +164,47 @@ class ZipMerge {
                 die("invalid central directory");
             }
         }
+    }
+
+    public function addDirectory($subPath)
+    {
+        if (!empty($subPath)) {
+            $subPath = \RelativePath::getRelativePath($subPath);
+            $subPath = rtrim($subPath, '/');
+
+            if (!empty($subPath)) {
+                $path = explode('/', $subPath);
+                $subPath .= '/';
+                $nPath = '';
+
+                foreach ($path as $dir) {
+                    $nPath .= $dir . '/';
+                    $fileEntry = ZipFileEntry::createDirEntry($nPath, time());
+
+                    $lf = $fileEntry->getLocalHeader();
+                    $this->zipWrite($lf);
+                    $lfLen =  BinStringStatic::_strlen($lf);
+                    $fileEntry->offset = $this->entryOffset;
+                    $this->entryOffset += $lfLen;
+
+                    $this->FILES[$this->LFHindex++] = $fileEntry;
+                    $this->CDRindex++;
+                }
+            }
+        }
+    }
+
+    public function addStream($name,$time,$stream)
+    {
+        $exploded=explode('/',$name);
+        if (count($exploded) > 1){
+            $subPath=join('/',array_slice($exploded,0,-1));
+            $this->addDirectory($subPath);
+        }
+        $streamFile=new File($name,$this,$this->entryOffset,$time);
+        $streamFile->readStream($stream);
+        $this->entryOffset+=$streamFile->written;
+        $this->FILES[$this->LFHindex++]=$streamFile->fileHeader;
     }
     
     /**

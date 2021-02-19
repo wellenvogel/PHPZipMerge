@@ -163,6 +163,12 @@ class ZipFileEntry extends AbstractZipHeader {
         return $lf;        
     }
 
+    public function getFooter(){
+        $lf=AbstractZipHeader::ZIP_LOCAL_DATA_DESCRIPTOR;
+        $lf.=pack('VVV',$this->fileCRC32, $this->gzLength, $this->dataLength);
+        return $lf;
+    }
+
     public function getCentralDirectoryHeader() {
         $ef = '';
         foreach ($this->extraFieldsArray as $value) {

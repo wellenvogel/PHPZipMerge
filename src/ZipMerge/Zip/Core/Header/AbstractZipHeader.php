@@ -16,7 +16,7 @@ abstract class AbstractZipHeader {
 
     const EXT_FILE_ATTR_DIR = "\x10\x40\xed\x41"; // Unix : Dir + mod:755
     const EXT_FILE_ATTR_FILE = "\x00\x40\xa4\x81"; // Unix : File + mod:644
-
+    const EXT_FILE_ATTR_FILE664 = "\x00\x40\xb4\x81";
     const ATTR_VERSION_TO_EXTRACT = "\x14\x00"; // Version needed to extract = 20 (File is compressed using Deflate compression)
     const ATTR_MADE_BY_VERSION = "\x1E\x03"; // Made By Version
 
