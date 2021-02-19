@@ -1,5 +1,5 @@
 {
-    "name": "grandt/phpzipmerge",
+    "name": "wellenvogel/phpzipmerge",
     "type": "library",
     "description": "Merge and stream multiple Zip files on the fly.",
     "keywords": ["phpzip", "zip", "pkzip", "archive", "compressed", "compression", "stream", "merge"],

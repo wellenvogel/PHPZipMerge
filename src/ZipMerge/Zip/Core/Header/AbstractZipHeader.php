@@ -63,4 +63,46 @@ abstract class AbstractZipHeader {
         
         return $pkHeader;
     }
+    public static function seekPKHeaderInBuffer($buffer,$start=0,$backwards=true) {
+        $pkHeader = false;
+        $len=strlen($buffer);
+        if ($len < 4) return array($pkHeader,0);
+        $ptr=$len-4;
+        $curr = substr($buffer,$ptr,1);
+
+        do {
+            while ($curr != 'P'){
+                $ptr--;
+                if ($ptr < 0) return array($pkHeader,$ptr);
+                $curr = substr($buffer,$ptr,1);
+            }
+            $ptr++;
+            $prev = $curr;
+            $curr = substr($buffer,$ptr,1);
+
+            $pk = $prev == "P" && $curr == "K";
+            if ($pk) {
+                $ptr++;
+                $b1 = substr($buffer,$ptr,1);
+                $ptr++;
+                $b2 = substr($buffer,$ptr,1);
+
+                if ($b1 == "\x01" && $b2 == "\x02") {
+                    $pkHeader = self::ZIP_CENTRAL_FILE_HEADER;
+                } else if ($b1 == "\x03" && $b2 == "\x04") {
+                    $pkHeader = self::ZIP_LOCAL_FILE_HEADER;
+                } else if ($b1 == "\x05" && $b2 == "\x06") {
+                    $pkHeader = self::ZIP_END_OF_CENTRAL_DIRECTORY;
+                } else if ($b1 == "\x07" && $b2 == "\x08") {
+                    $pkHeader = self::ZIP_LOCAL_DATA_DESCRIPTOR;
+                } else {
+                    $ptr-=2;
+                    $pk = false;
+                }
+                if ($pkHeader !== false) return array($pkHeader,$ptr-3);
+            }
+            $ptr--;
+        } while (true);
+        return array($pkHeader,$ptr);
+    }
 }

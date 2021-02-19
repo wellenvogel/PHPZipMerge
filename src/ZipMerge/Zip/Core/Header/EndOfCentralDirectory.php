@@ -36,7 +36,7 @@ class EndOfCentralDirectory extends AbstractZipHeader {
      * --------------------------------------------------------------------------------------
      *                                                                               22 bytes
      *
-     * @param resource $handle
+     * @param string $handle
      */
     public function __construct($handle = null) {
         if ($handle != null) {
@@ -46,8 +46,8 @@ class EndOfCentralDirectory extends AbstractZipHeader {
 
     public function parseHeader($handle) {
         if ($handle != null) {
-            $this->offset = (int)ftell($handle) - 4;
-
+            $this->offset = (int)ftell($handle);
+            $dummy=fread($handle,4);
             $arr = unpack("v4wa/V2dwa/vwb", fread($handle, 22));
             $this->thisDisk = $arr['wa1'];
             $this->firstCDDisk = $arr['wa2'];

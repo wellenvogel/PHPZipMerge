@@ -49,65 +49,11 @@ class ZipFileEntry extends AbstractZipHeader {
             $this->parseHeader($handle);
         }
     }
-    
+
     public function parseHeader($handle) {
         $pk = fread($handle, 4);
         if ($pk == AbstractZipHeader::ZIP_LOCAL_FILE_HEADER) {
-            /*
-            * local file header signature     4 bytes  (0x04034b50)
-            * version needed to extract       2 bytes
-            * general purpose bit flag        2 bytes
-            * compression method              2 bytes
-            * last mod file time + file date  4 bytes
-            * crc-32                          4 bytes
-            * compressed size                 4 bytes
-            * uncompressed size               4 bytes
-            * file name length                2 bytes
-            * extra field length              2 bytes
-            * ---------------------------------------
-            *                                30 bytes
-             */
-            $this->offset = (int)ftell($handle) - 4;
-
-            $this->versionNeeded            = fread($handle, 2);
-            $arr = unpack("v2wa", fread($handle, 4));
-            $this->gpFlags                    = $arr['wa1'];
-            $this->gzType                    = $arr['wa2'];
-            $this->dosTime                    = fread($handle, 4);
-            $arr = unpack("V3dwa/v2wa", fread($handle, 16));
-            $this->fileCRC32                = $arr['dwa1'];
-            $this->gzLength                    = $arr['dwa2'];
-            $this->dataLength                = $arr['dwa3'];
-            $filePathLength                    = $arr['wa1'];
-            $localExtraFieldLength            = $arr['wa2'];
-
-            $this->path = fread($handle, $filePathLength);
-            $this->dataOffset = 30 + $filePathLength + $localExtraFieldLength;
-
-            if ($localExtraFieldLength > 0) {
-                $eoef = ftell($handle) + $localExtraFieldLength;
-                while (ftell($handle) < $eoef) {
-                    $ef = AbstractExtraField::decodeField($handle);
-                    /* @var $ef AbstractExtraField */
-                    $this->extraFieldsArray[$ef->header] = $ef;
-                }
-            }
-
-            $hasDataDescriptor = $this->gpFlags & 4 == 4;
-
-            if ($hasDataDescriptor) {
-                $pkHeader = AbstractZipHeader::seekPKHeader($handle);
-                if ($pkHeader !== self::ZIP_LOCAL_DATA_DESCRIPTOR) {
-                    fseek($handle, -12, SEEK_CUR);
-                }
-                $arr = unpack("Vdwa", fread($handle, 12));
-                $this->fileCRC32                = $arr['dwa1'];
-                $this->gzLength                    = $arr['dwa2'];
-                $this->dataLength                = $arr['dwa3'];
-            } else {
-                fseek($handle, $this->gzLength, SEEK_CUR);
-            }
-            $this->isDirectory = !$hasDataDescriptor && $this->dataLength == 0 && $this->fileCRC32 == 0;
+            throw new \Exception("local file header not supported");
         } else if ($pk == AbstractZipHeader::ZIP_CENTRAL_FILE_HEADER) {
             /*
             * 
@@ -145,21 +91,20 @@ class ZipFileEntry extends AbstractZipHeader {
             $this->gzType                   = $arr['wa2'];
             $this->dosTime                  = fread($handle, 4);
             $arr = unpack("V3dwa/v3wa", fread($handle, 18));
-            // $this->fileCRC32                = $arr['dwa1'];
-            // $this->gzLength                 = $arr['dwa2'];
-            // $this->dataLength               = $arr['dwa3'];
+            $this->fileCRC32                = $arr['dwa1'];
+            $this->gzLength                 = $arr['dwa2'];
+            $this->dataLength               = $arr['dwa3'];
             $filePathLength                 = $arr['wa1'];
             $centralExtraFieldLength        = $arr['wa2'];
             $fileCommentLength              = $arr['wa3'];
             $this->discNumberStart          = fread($handle, 2);
             $this->internalFileAttributes   = fread($handle, 2);
             $this->externalFileAttributes   = fread($handle, 4);
-            // $arr = unpack("V", fread($handle, 4));
-            // $this->relativeOffsetOfLocalHeader    = $arr[1];
+            $arr = unpack("V", fread($handle, 4));
+            $this->offset   = $arr[1];
 
-            // $this->path = fread($handle, $filePathLength);
+            $this->path = fread($handle, $filePathLength);
 
-            fseek($handle, 4+$filePathLength, SEEK_CUR);
 
             if ($centralExtraFieldLength > 0) {
                 $eoef = ftell($handle) + $centralExtraFieldLength;
@@ -180,7 +125,7 @@ class ZipFileEntry extends AbstractZipHeader {
                 $this->comment = fread($handle, $fileCommentLength);
             }
         } else {
-            fseek($handle, -4, SEEK_CUR);
+            throw new \Exception("no valid header found");
         }
     }
     

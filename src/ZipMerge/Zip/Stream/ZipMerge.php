@@ -24,6 +24,8 @@ use ZipMerge\Zip\Exception\BufferNotEmpty;
 use ZipMerge\Zip\Exception\HeadersSent;
 use ZipMerge\Zip\Exception\IncompatiblePhpVersion;
 use ZipMerge\Zip\Listener\ZipArchiveListener;
+use ZipMerge\util\VariableStream;
+
 
 class ZipMerge {
     const APP_NAME = 'PHPZipMerge';
@@ -46,8 +48,10 @@ class ZipMerge {
     protected $entryOffset = 0;
     protected $streamChunkSize = 65536; // 64kb
     protected $mode = self::MODE_STREAM;
+    protected $firstHeader=null;
     /** @var $writer AbstractZipWriter */
     public $writer = null;
+    public $id = '';
 
     /**
      * Constructor.
@@ -59,9 +63,9 @@ class ZipMerge {
      * @param String $utf8FileName The name of the Zip archive, in UTF-8 encoding. Optional, defaults to NULL, which means that no UTF-8 encoded file name will be specified.
      * @param bool $inline Use Content-Disposition with "inline" instead of "attached". Optional, defaults to false.
      */
-    public function __construct($fileName = null, $contentType = "application/zip", $utf8FileName = null, $inline = false) {
+    public function __construct($fileName = null, $contentType = "application/zip", $utf8FileName = null, $inline = false,$streamChunkSize=2000000) {
         $this->checkVersion();
-
+        $this->id=uniqid('ZipMerge');
         if ($fileName !== null) {
             $this->buildResponseHeader($fileName, $contentType, $utf8FileName, $inline);
             $this->zipFlushBuffer();
@@ -69,6 +73,7 @@ class ZipMerge {
         } else {
             $this->mode = self::MODE_INLINE;
         }
+        $this->streamChunkSize=$streamChunkSize;
     }
 
     public function __destruct() {
@@ -80,107 +85,84 @@ class ZipMerge {
      * Append the contents of an existing zip file to the current, WITHOUT re-compressing the data within it.
      *
      * @param string $file the path to the zip file to be added.
-     * @param string $subPath place the contents in the $subPath sub-folder, default is '', and places the
-     *        content in the root of the new zip file.
-     * @param AbstractZipWriter $writer Only used by the PHPZip files. Will write all output to the $writer,
-     *        instead of the stream.
      * @return bool true for success.
      */
-    public function appendZip($file, $subPath = '', $writer = null) {
+    public function appendZip($file) {
         if ($this->isFinalized) {
             return false;
         }
-        $this->writer = $writer;
-        if (!empty($subPath)) {
-            $subPath = \RelativePath::getRelativePath($subPath);
-            $subPath = rtrim($subPath, '/');
-
-            if (!empty($subPath)) {
-                $path = explode('/', $subPath);
-                $subPath .= '/';
-                $nPath = '';
-
-                foreach ($path as $dir) {
-                    $nPath .= $dir . '/';
-                    $fileEntry = ZipFileEntry::createDirEntry($nPath, time());
-                    $data = $fileEntry->getLocalHeader();
-                    $this->zipWrite($data);
-
-                    $lf = $fileEntry->getLocalHeader();
-                    $lfLen =  BinStringStatic::_strlen($lf);
-                    $fileEntry->offset = $this->entryOffset;
-                    $this->entryOffset += $lfLen;
-
-                    $this->FILES[$this->LFHindex++] = $fileEntry;
-                    $this->CDRindex++;
-                }
-            }
-        }
-        
         if (is_string($file) && is_file($file)) {
             $handle = fopen($file, 'r');
             $this->processStream($handle, $subPath);
             fclose($handle);
         } else if (is_resource($file) && get_resource_type($file) == "stream") {
-            $curPos = ftell($file);
-            $this->processStream($file, $subPath);
-            fseek($file, $curPos, SEEK_SET);
+            $this->processStream($file);
         }
         return true;
     }
+
+    private function open_buffer_stream(&$buffer,$offset=0){
+        VariableStream::deregisterObject($this->id);
+        VariableStream::registerObject($this->id,$buffer,$offset);
+        return fopen('var://'.$this->id,'rb');
+    }
+    private function close_buffer_stream(&$stream){
+        fclose($stream);
+        VariableStream::deregisterObject($this->id);
+    }
     
-    private function processStream($handle, $subPath = '') {
-        $pkHeader = null;
-
-        do {
-            $curPos = ftell($handle);
-            $pkHeader = AbstractZipHeader::seekPKHeader($handle);
-
-            if ($pkHeader === false || feof($handle)) {
+    private function processStream($handle) {
+        $buffer='';
+        $startOfStreamOffset=$this->entryOffset;
+        while (true) {
+            $data = fread($handle, $this->streamChunkSize);
+            $len=strlen($data);
+            if ($len > 0) {
+                $this->entryOffset+=$len;
+                $this->zipWrite($data);
+                if (strlen($buffer) < ($this->streamChunkSize + $len)){
+                    $buffer.=$data;
+                }
+                else{
+                    $buffer=substr($buffer,$this->streamChunkSize-$len).$data;
+                }
+            }
+            else{
                 break;
             }
-            $pkPos = ftell($handle);
+            //reached the end
+            //now we search for the directory in $buffer
 
-            if ($curPos < ($pkPos)) {
-                $this->_throwException(new HeaderPositionError(array(
-                    'expected' => $curPos,
-                    'actual' => $pkPos
-                )));
+        }
+        $pkHeader = null;
+        $pkHeaderAndPtr = AbstractZipHeader::seekPKHeaderInBuffer($buffer);
+        if ($pkHeaderAndPtr[0] !== AbstractZipHeader::ZIP_END_OF_CENTRAL_DIRECTORY){
+            die("unable to find zip directory in buffer");
+        }
+        $eocdPtr=$pkHeaderAndPtr[1];
+        $readBuffer=substr($buffer,$eocdPtr);
+        $s=$this->open_buffer_stream($readBuffer);
+        $this->eocd = new EndOfCentralDirectory($s);
+        $this->close_buffer_stream($s);
+        $dirsize=$this->eocd->cdrLength;
+        if (($eocdPtr-$dirsize) <0){
+            die("buffer too small for central directory");
+        }
+        $start=$eocdPtr-$dirsize;
+        $handle=$this->open_buffer_stream($buffer,$start);
+        while(true) {
+            $fileEntry = new ZipFileEntry($handle);
+            $fileEntry->offset+=$startOfStreamOffset;
+            $this->FILES[$this->LFHindex++] = $fileEntry;
+            $nextHeader = substr($buffer, $start+ftell($handle), 4);
+            if ($nextHeader === AbstractZipHeader::ZIP_END_OF_CENTRAL_DIRECTORY) {
+                //we are done
+                break;
             }
-
-            if ($pkHeader === AbstractZipHeader::ZIP_CENTRAL_FILE_HEADER) {
-                $fileEntry = $this->FILES[$this->CDRindex++];
-                /* @var $fileEntry ZipFileEntry */
-                $fileEntry->parseHeader($handle);
-            } else if ($pkHeader === AbstractZipHeader::ZIP_LOCAL_FILE_HEADER) {
-                $fileEntry = new ZipFileEntry($handle);
-                $this->FILES[$this->LFHindex++] = $fileEntry;
-
-                $fileEntry->prependPath($subPath);
-
-                $lf = $fileEntry->getLocalHeader();
-                $lfLen =  BinStringStatic::_strlen($lf);
-                $this->zipWrite($lf);
-
-                fseek($handle, $fileEntry->offset + $fileEntry->dataOffset, SEEK_SET);
-                if (!$fileEntry->isDirectory) {
-                    $len = $fileEntry->gzLength;
-                    while ($len >= $this->streamChunkSize) {
-                        $data = fread($handle, $this->streamChunkSize);
-                        $this->zipWrite($data);
-                        $len -= $this->streamChunkSize;
-                    }
-                    $data = fread($handle, $len);
-                    $this->zipWrite($data);
-                }
-
-                $fileEntry->offset = $this->entryOffset;
-                $this->entryOffset += $lfLen + $fileEntry->gzLength;
-            } else if ($pkHeader === AbstractZipHeader::ZIP_END_OF_CENTRAL_DIRECTORY) {
-                fread($handle, 4);
-                $this->eocd = new EndOfCentralDirectory($handle);
+            if ($nextHeader !== AbstractZipHeader::ZIP_CENTRAL_FILE_HEADER) {
+                die("invalid central directory");
             }
-        } while (!feof($handle));
+        }
     }
     
     /**
