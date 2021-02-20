@@ -1,0 +1,26 @@
+h1{
+    text-align: center;
+}
+.row {
+    display: flex;
+    flex-direction: row;
+    margin: 0.3em;
+    max-width: 50em;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 2em;
+}
+.row label {
+    width: 8em;
+}
+.row input {
+    flex-grow: 1;
+}
+input.empty{
+    border-color: red;
+}
+iframe#downloadframe {
+    width: 0;
+    height: 0;
+    border: 0;
+}

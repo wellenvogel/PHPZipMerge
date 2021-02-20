@@ -2,9 +2,33 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Zip Merge Test</title>
+    <link rel="stylesheet" href="index.css">
+    <script type="text/javascript" src="index.js"></script>
 </head>
 <body>
 <h1>Zip Merge Test</h1>
+<div class="row">
+    <label for="outname">outname</label>
+    <input type="text" id="outname" value="test1.zip"/>
+</div>
+<div class="row">
+    <label for="zipfile">zipurl</label>
+    <input type="text" id="zipfile" value="https://www.wellenvogel.net/software/avnav/downloads/release/20210115/avnav-20210115.zip"/>
+</div>
+<div class="row">
+    <label for="filename">filename in zip</label>
+    <input type="text" id="filename" value="ziptest/test.h"/>
+</div>
+<div class="row">
+    <label for="file">file url</label>
+    <input type="text" id="file" value="https://raw.githubusercontent.com/wellenvogel/simple-cpp-threads/master/SimpleThread.h"/>
+</div>
+<div class="row">
+    <button id="download">Download</button>
+</div>
+<iframe id="downloadframe">
+
+</iframe>
 </body>
 </html>
