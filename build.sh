@@ -5,5 +5,5 @@ version="$1"
 if [ "$version" = "" ] ; then
   version=`date '+%Y%m%d'`
 fi
-
-zip -r bundle$version . -x tests/\* -x .git/\* -x .idea/\* -x \*.zip
+rm -f bundle$version.zip
+zip -r bundle$version . -x tests/\* -x .git/\* -x .idea/\* -x \*.zip -x .github/\* -x .gitignore -x .gitattributes
