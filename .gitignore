@@ -24,7 +24,7 @@ vendor
 vendor/*
 *.lock
 /tests/*.lock
-/*.phar
+composer_2.phar*
 
 # Compiled source #
 ###################
