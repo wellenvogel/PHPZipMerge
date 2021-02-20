@@ -18,18 +18,37 @@ function getParam($name,$required=true){
 function getRemoteInfo($url,$raise=true){
     $TIME_HEADER='Last-Modified';
     $context  = stream_context_create(array('http' =>array('method'=>'HEAD')));
-    $headers=get_headers($url,1,$context);
-    if ($headers === false || ! isset($headers[0])
-        || ! preg_match('/200/',$headers[0])){
+    $fp=fopen($url,'rb',false,$context);
+
+    $headers=stream_get_meta_data($fp);
+    fclose($fp);
+    $error=null;
+    if ($headers === null){
+        $error="unable to open";
+    }
+    else {
+        $headers=$headers['wrapper_data'];
+        if (!isset($headers[0])) {
+            $error = "invalid get_headers - missing response";
+        } else {
+            if (!preg_match('/200/', $headers[0])) {
+                $error = "invalid response " . $headers[0];
+            }
+        }
+    }
+    if ($error != null){
         if ($raise) {
-            throw new \Exception("unable to open url $url");
+            throw new \Exception("$error, url $url");
         }
         else{
             return false;
         }
     }
-    if (isset($headers[$TIME_HEADER])){
-        return strtotime($headers[$TIME_HEADER]);
+    foreach($headers as $header){
+        $nv=preg_split('/ *: */',$header,2);
+        if (count($nv) > 1 && $nv[0] == $TIME_HEADER){
+            return strtotime($nv[1]);
+        }
     }
     return time();
 }
