@@ -1,11 +1,11 @@
 {
     "name": "wellenvogel/phpzipmerge",
     "type": "library",
-    "description": "Merge and stream multiple Zip files on the fly.",
+    "description": "Merge and stream multiple Zip streams on the fly.",
     "keywords": ["phpzip", "zip", "pkzip", "archive", "compressed", "compression", "stream", "merge"],
-    "homepage": "https://github.com/Grandt/PHPZipMerge",
+    "homepage": "https://github.com/wellenvogel/PHPZipMerge",
     "license": "LGPL-2.1",
-    "version": "1.0.4",
+    "version": "1.0.0",
     "authors": [
         {
             "name": "A. Grandt",
@@ -16,6 +16,11 @@
         {
             "name": "Greg Kappatos",
             "homepage": "http://websiteconnect.com.au",
+            "role": "Developer"
+        },
+        {
+            "name": "Andreas Vogel",
+            "homepage": "http://www.wellenvogel.de",
             "role": "Developer"
         }
     ],
