@@ -6,4 +6,4 @@ if [ "$version" = "" ] ; then
   version=`date '+%Y%m%d'`
 fi
 rm -f bundle$version.zip
-zip -r bundle$version . -x tests/\* -x .git/\* -x .idea/\* -x \*.zip -x .github/\* -x .gitignore -x .gitattributes
+zip -r bundle$version . -x tests/\* -x .git/\* -x .idea/\* -x \*.zip -x .github/\* -x .gitignore -x .gitattributes -x composer.phar -x composer.json -x build.sh
