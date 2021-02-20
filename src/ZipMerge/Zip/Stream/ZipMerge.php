@@ -90,16 +90,16 @@ class ZipMerge {
      * @param string $file the path to the zip file to be added.
      * @return bool true for success.
      */
-    public function appendZip($file) {
+    public function appendZip($file,$name=null) {
         if ($this->isFinalized) {
             return false;
         }
         if (is_string($file) && is_file($file)) {
             $handle = fopen($file, 'r');
-            $this->processStream($handle,$file);
+            $this->processStream($handle,$name != null?$name:$file);
             fclose($handle);
         } else if (is_resource($file) && get_resource_type($file) == "stream") {
-            $this->processStream($file,$file);
+            $this->processStream($file,$name!=null?$name:$file);
         }
         return true;
     }
@@ -227,7 +227,43 @@ class ZipMerge {
         $this->entryOffset+=$streamFile->written;
         $this->FILES[$this->LFHindex++]=$streamFile->fileHeader;
     }
-    
+    public function addData($name,$time,$data)
+    {
+        $exploded=explode('/',$name);
+        if (count($exploded) > 1){
+            $subPath=join('/',array_slice($exploded,0,-1));
+            $this->addDirectory($subPath);
+        }
+        $streamFile=new File($name,$this,$this->entryOffset,$time);
+        $streamFile->readData($data);
+        $this->entryOffset+=$streamFile->written;
+        $this->FILES[$this->LFHindex++]=$streamFile->fileHeader;
+    }
+
+    /**
+     * reset the collected files
+     * when finalizing afterwards an empty zip file would be created
+     */
+    public function reset()
+    {
+        $this->LFHindex=0;
+        $this->FILES=array();
+    }
+
+    /**
+     * wri8te a file named "ERROR" to the stream
+     * @param $error
+     * @param $reset boolean if set - reset the stream
+     */
+    public function writeError($error,$reset=true)
+    {
+        if ($reset){
+            $this->reset();
+        }
+        $this->addData('ERROR',time(),$error);
+
+    }
+
     /**
      * Close the archive.
      * A closed archive can no longer have new files added to it.

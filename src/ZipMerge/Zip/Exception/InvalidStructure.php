@@ -31,8 +31,8 @@ class InvalidStructure extends AbstractException {
         $this->_info = $config['info'];
         $this->_fileName = isset($config['fileName']) ? $config['fileName'] : null;
 
-        $message = 'Invalid structure '.$this->_info;
-        $message .= is_null($this->_fileName) ? '' : "in '{$this->_fileName}'. ";
+        $message = 'Invalid structure: '.$this->_info;
+        $message .= is_null($this->_fileName) ? '' : " in '{$this->_fileName}'. ";
 
         parent::__construct($message);
     }
