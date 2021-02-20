@@ -9,6 +9,7 @@
  * Another use case is to combine collections of for existing packages/collections of data the client may have
  *  purchased, and allow them to download these on the fly in a single file.
  * @author Grandt
+ * @author Andreas Vogel
  */
 
 namespace ZipMerge\Zip\Stream;
@@ -24,13 +25,14 @@ use ZipMerge\Zip\Exception\HeaderPositionError;
 use ZipMerge\Zip\Exception\BufferNotEmpty;
 use ZipMerge\Zip\Exception\HeadersSent;
 use ZipMerge\Zip\Exception\IncompatiblePhpVersion;
+use ZipMerge\Zip\Exception\InvalidStructure;
 use ZipMerge\Zip\File\File;
 use ZipMerge\Zip\Listener\ZipArchiveListener;
 
 
 class ZipMerge {
-    const APP_NAME = 'PHPZipMerge';
-    const VERSION = "1.0.2";
+    const APP_NAME = 'PHPZipStreamMerge';
+    const VERSION = "1.0.0";
     const MIN_PHP_VERSION = 5.3; // for namespaces
     
     const CONTENT_TYPE = 'application/zip';
@@ -43,13 +45,13 @@ class ZipMerge {
     protected $isFinalized = false;
 
     protected $FILES = array();
+    protected $createdDirectories=array();
     protected $eocd = null;
     protected $LFHindex = 0;
     protected $CDRindex = 0;
     protected $entryOffset = 0;
     protected $streamChunkSize = 65536; // 64kb
     protected $mode = self::MODE_STREAM;
-    protected $firstHeader=null;
     /** @var $writer AbstractZipWriter */
     public $writer = null;
     public $id = '';
@@ -94,10 +96,10 @@ class ZipMerge {
         }
         if (is_string($file) && is_file($file)) {
             $handle = fopen($file, 'r');
-            $this->processStream($handle);
+            $this->processStream($handle,$file);
             fclose($handle);
         } else if (is_resource($file) && get_resource_type($file) == "stream") {
-            $this->processStream($file);
+            $this->processStream($file,$file);
         }
         return true;
     }
@@ -112,16 +114,16 @@ class ZipMerge {
         VariableStream::deregisterObject($this->id);
     }
     
-    private function processStream($handle) {
+    private function processStream($handle,$file=null) {
         $buffer='';
         $startOfStreamOffset=$this->entryOffset;
         while (true) {
             $data = fread($handle, $this->streamChunkSize);
-            $len=strlen($data);
+            $len=BinStringStatic::_strlen($data);
             if ($len > 0) {
                 $this->entryOffset+=$len;
                 $this->zipWrite($data);
-                if (strlen($buffer) < ($this->streamChunkSize + $len)){
+                if (BinStringStatic::_strlen($buffer) < ($this->streamChunkSize + $len)){
                     $buffer.=$data;
                 }
                 else{
@@ -138,7 +140,12 @@ class ZipMerge {
         $pkHeader = null;
         $pkHeaderAndPtr = AbstractZipHeader::seekPKHeaderInBuffer($buffer);
         if ($pkHeaderAndPtr[0] !== AbstractZipHeader::ZIP_END_OF_CENTRAL_DIRECTORY){
-            die("unable to find zip directory in buffer");
+            throw new InvalidStructure(
+                array(
+                    'info'=>"unable to find zip directory in buffer",
+                    'fileName'=> $file
+                )
+            );
         }
         $eocdPtr=$pkHeaderAndPtr[1];
         $readBuffer=substr($buffer,$eocdPtr);
@@ -147,7 +154,12 @@ class ZipMerge {
         $this->close_buffer_stream($s);
         $dirsize=$this->eocd->cdrLength;
         if (($eocdPtr-$dirsize) <0){
-            die("buffer too small for central directory");
+            throw new InvalidStructure(
+                array(
+                    'info'=>"buffer too small for central directory",
+                    'fileName'=> $file
+                )
+            );
         }
         $start=$eocdPtr-$dirsize;
         $handle=$this->open_buffer_stream($buffer,$start);
@@ -161,7 +173,12 @@ class ZipMerge {
                 break;
             }
             if ($nextHeader !== AbstractZipHeader::ZIP_CENTRAL_FILE_HEADER) {
-                die("invalid central directory");
+                throw new InvalidStructure(
+                    array(
+                        'info'=>"invalid central directory",
+                        'fileName'=> $file
+                    )
+                );
             }
         }
     }
@@ -173,6 +190,10 @@ class ZipMerge {
             $subPath = rtrim($subPath, '/');
 
             if (!empty($subPath)) {
+                if (isset($this->createdDirectories[$subPath])){
+                    return;
+                }
+                $this->createdDirectories[$subPath]=true;
                 $path = explode('/', $subPath);
                 $subPath .= '/';
                 $nPath = '';

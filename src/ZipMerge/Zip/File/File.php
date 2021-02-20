@@ -49,7 +49,7 @@ class File
     /**
      * @var resource
      */
-    private $hash;
+    private $hash=null;
 
 
     private $time;
@@ -119,18 +119,27 @@ class File
         return $this->fileHeader;
     }
 
-    public function readStream($stream)
+    public function readStream($stream,$finalize=true)
     {
-        $this->hash = hash_init(self::HASH_ALGORITHM);
         while (true) {
             $data = fread($stream,self::CHUNKED_READ_BLOCK_SIZE);
             $len = strlen($data);
             if ($len <= 0) break;
+            $this->readData($data,false);
+        }
+        $this->readData('',$finalize);
+    }
+    public function readData($data,$finalize=true)
+    {
+        if ($this->hash == null) $this->hash = hash_init(self::HASH_ALGORITHM);
+        $len = strlen($data);
+        if ($len > 0) {
             $this->len += $len;
             hash_update($this->hash, $data);
             $this->zipstream->zipWrite($data);
             $this->written += $len;
         }
+        if (! $finalize) return;
         $this->zlen=$this->len;
         $this->crc = hexdec(hash_final($this->hash));
         $this->UpdateZipEntry();
